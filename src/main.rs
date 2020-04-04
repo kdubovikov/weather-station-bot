@@ -1,5 +1,14 @@
 use rumqtt::{MqttClient, MqttOptions, QoS};
 use std::{sync::Arc, convert::TryInto};
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+struct WeatherMessage {
+    temp: f32,
+    pressure: f32,
+    altitude: f32,
+    humidity: f32
+}
 
 fn main() {
     let mut settings = config::Config::default();
@@ -24,6 +33,8 @@ fn main() {
                 let payload = Arc::try_unwrap(publish.payload).unwrap();
                 let text: String = String::from_utf8(payload).expect("Can't decode payload for notification"); 
                 println!("Recieved message: {}", text);
+                let msg: WeatherMessage = serde_json::from_str(&text).expect("Error while deserializing message from ESP");
+                println!("Deserialized message: {:?}", msg);
             }
             _ => println!("{:?}", notification)
         }
