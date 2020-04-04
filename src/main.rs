@@ -1,34 +1,11 @@
+mod settings;
+
 use rumqtt::{MqttClient, MqttOptions, QoS};
-use std::{sync::Arc, convert::TryInto, fmt::Display};
+use std::{sync::Arc};
 use serde::{Serialize, Deserialize};
-use config::ConfigError;
+use std::fmt::Display;
+use crate::settings::Settings;
 
-#[derive(Serialize, Deserialize)]
-struct MQTTSettings {
-    host: String,
-    port: u16,
-    topic_name: String
-}
-
-#[derive(Serialize, Deserialize)]
-struct TelegramSettings {
-    token: String
-}
-
-#[derive(Serialize, Deserialize)]
-struct Settings {
-    mqtt: MQTTSettings,
-    telegram: TelegramSettings
-}
-
-impl Settings {
-   pub fn new() -> Result<Self, ConfigError> {
-    let mut settings = config::Config::default();
-    println!("Reading config file");
-    settings.merge(config::File::with_name("config")).unwrap();
-    settings.try_into()
-   }
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct WeatherMessage {
@@ -77,7 +54,7 @@ impl Display for WeatherMessage {
 }
 
 fn main() {
-    let mut settings = Settings::new().expect("Error while reading settings"); 
+    let settings = Settings::new().expect("Error while reading settings"); 
 
     println!("Conntcting to MQTT server at {}:{}/{}", settings.mqtt.host, settings.mqtt.port, settings.mqtt.topic_name);
     let mqtt_options = MqttOptions::new("weather_station_bot", settings.mqtt.host, settings.mqtt.port);
