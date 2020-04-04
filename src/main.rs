@@ -4,6 +4,7 @@ use rumqtt::{MqttClient, MqttOptions, QoS};
 use std::{sync::Arc};
 use serde::{Serialize, Deserialize};
 use std::fmt::Display;
+use clap::{App, Arg};
 use crate::settings::Settings;
 
 
@@ -54,7 +55,20 @@ impl Display for WeatherMessage {
 }
 
 fn main() {
-    let settings = Settings::new().expect("Error while reading settings"); 
+    let matches = App::new("Weather station bot")
+                    .version("0.1.0")
+                    .author("Kirill Dubovikov <dubovikov.kirill@gmail.com>")
+                    .about("Telegram bot for ESP32 weather station")
+                    .arg(Arg::with_name("config")
+                        .short("c")
+                        .long("config")
+                        .value_name("FILE")
+                        .help("Sets a custom config file")
+                        .required(true)
+                    ).get_matches();
+    
+    let config = matches.value_of("config").unwrap_or("config");
+    let settings = Settings::new(config).expect("Error while reading settings"); 
 
     println!("Conntcting to MQTT server at {}:{}/{}", settings.mqtt.host, settings.mqtt.port, settings.mqtt.topic_name);
     let mqtt_options = MqttOptions::new("weather_station_bot", settings.mqtt.host, settings.mqtt.port);

@@ -20,10 +20,10 @@ pub struct Settings {
 }
 
 impl Settings {
-   pub fn new() -> Result<Self, ConfigError> {
-    let settings = config::Config::default();
+   pub fn new(config_path: &str) -> Result<Self, ConfigError> {
+    let mut settings = config::Config::default();
     println!("Reading config file");
-    settings.merge(config::File::with_name("config")).unwrap();
+    settings.merge(config::File::with_name(config_path)).unwrap();
     settings.try_into()
    }
 }
