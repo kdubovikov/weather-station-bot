@@ -1,6 +1,34 @@
 use rumqtt::{MqttClient, MqttOptions, QoS};
 use std::{sync::Arc, convert::TryInto, fmt::Display};
 use serde::{Serialize, Deserialize};
+use config::ConfigError;
+
+#[derive(Serialize, Deserialize)]
+struct MQTTSettings {
+    host: String,
+    port: u16,
+    topic_name: String
+}
+
+#[derive(Serialize, Deserialize)]
+struct TelegramSettings {
+    token: String
+}
+
+#[derive(Serialize, Deserialize)]
+struct Settings {
+    mqtt: MQTTSettings,
+    telegram: TelegramSettings
+}
+
+impl Settings {
+   pub fn new() -> Result<Self, ConfigError> {
+    let mut settings = config::Config::default();
+    println!("Reading config file");
+    settings.merge(config::File::with_name("config")).unwrap();
+    settings.try_into()
+   }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct WeatherMessage {
@@ -49,19 +77,13 @@ impl Display for WeatherMessage {
 }
 
 fn main() {
-    let mut settings = config::Config::default();
-    println!("Reading config file");
-    settings.merge(config::File::with_name("config")).unwrap();
+    let mut settings = Settings::new().expect("Error while reading settings"); 
 
-    let host = settings.get_str("mqtt_host").expect("Add mqtt_host to config.toml");
-    let port: u16 = settings.get_int("mqtt_port").expect("Add mqtt_port to config.toml").try_into().unwrap();
-    let topic_name = settings.get_str("topic_name").expect("Add topic_name to config.toml");
-
-    println!("Conntcting to MQTT server at {}:{}/{}", host, port, topic_name);
-    let mqtt_options = MqttOptions::new("weather_station_bot", host, port);
+    println!("Conntcting to MQTT server at {}:{}/{}", settings.mqtt.host, settings.mqtt.port, settings.mqtt.topic_name);
+    let mqtt_options = MqttOptions::new("weather_station_bot", settings.mqtt.host, settings.mqtt.port);
     let (mut mqtt_client, notifications) = MqttClient::start(mqtt_options).unwrap();
       
-    mqtt_client.subscribe(topic_name, QoS::AtLeastOnce).unwrap();
+    mqtt_client.subscribe(settings.mqtt.topic_name, QoS::AtLeastOnce).unwrap();
 
     println!("Waiting for notifications");
     for notification in notifications {
