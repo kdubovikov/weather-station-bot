@@ -1,5 +1,5 @@
 use rumqtt::{MqttClient, MqttOptions, QoS};
-use std::{sync::Arc, convert::TryInto};
+use std::{sync::Arc, convert::TryInto, fmt::Display};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -8,6 +8,44 @@ struct WeatherMessage {
     pressure: f32,
     altitude: f32,
     humidity: f32
+}
+
+impl WeatherMessage {
+    fn temp_to_emoji(&self) -> &str {
+        if self.temp < -10. {
+            "🥶"
+        } else if self.temp < 0. {
+            "❄️"
+        } else if self.temp > 20.  {
+            "☀️"
+        } else if self.temp > 30. {
+            "🔥"
+        } else {
+            ""
+        }
+    }
+
+    fn humidity_to_emoji(&self) -> &str {
+        if self.humidity > 70. {
+            "не забудь зонтик ☂️"
+        } else if self.humidity > 90. {
+            "🌧"
+        } else {
+            ""
+        }
+    }
+
+    fn should_alert(&self) -> bool {
+        self.temp > 30. || self.temp < 15. || self.humidity >= 85.
+    }
+}
+
+impl Display for WeatherMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { 
+        write!(f, "{}{}\n℃{:>10.2}\nВлажность{:>10.2}%\nДавление{:>10.2}", 
+                  self.temp_to_emoji(), self.humidity_to_emoji(), self.temp, self.humidity, self.pressure)
+     }
+
 }
 
 fn main() {
@@ -35,6 +73,7 @@ fn main() {
                 println!("Recieved message: {}", text);
                 let msg: WeatherMessage = serde_json::from_str(&text).expect("Error while deserializing message from ESP");
                 println!("Deserialized message: {:?}", msg);
+                println!("{}", msg);
             }
             _ => println!("{:?}", notification)
         }
