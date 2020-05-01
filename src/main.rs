@@ -7,13 +7,17 @@ use serde::{Serialize, Deserialize};
 use std::fmt::Display;
 use clap::{App, Arg};
 use crate::settings::Settings;
-use tbot::prelude::*;
 use tbot::contexts::fields::Message;
 use tokio::sync::mpsc;
 use std::collections::HashMap;
-use tbot::{errors::MethodCall, types::{chat, parameters::Text, parameters::ChatId, parameters::ImplicitChatId}};
 use std::ops::Deref;
 use tbot::types::Chat;
+
+use tbot::{
+    markup::markdown_v2, prelude::*, types::parameters::{Text, ChatId}, util::entities,
+    Bot
+};
+
 
 #[derive(Serialize, Deserialize, Debug)]
 struct WeatherMessage {
@@ -48,6 +52,19 @@ impl WeatherMessage {
         }
     }
 
+    fn pressure_to_enoji(&self) -> &str {
+        const pa_to_mm_mercury: f32 = 133.322;
+        const normal_pressure: f32 = 101_325.0 / pa_to_mm_mercury;
+
+        if (self.pressure / pa_to_mm_mercury) > (normal_pressure + 10.0) {
+            "⬆️ повышенное давление"
+        } else if (self.pressure / pa_to_mm_mercury) < (normal_pressure - 10.0) {
+            "⬇️ пониженное давление"
+        } else {
+            ""
+        }
+    }
+
     fn should_alert(&self) -> bool {
         self.temp > 30. || self.temp < 15. || self.humidity >= 85.
     }
@@ -55,8 +72,10 @@ impl WeatherMessage {
 
 impl Display for WeatherMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { 
-        write!(f, "{}{}\n℃{:>10.2}\nВлажность{:>10.2}%\nДавление{:>10.2}", 
-                  self.temp_to_emoji(), self.humidity_to_emoji(), self.temp, self.humidity, self.pressure)
+        const pa_to_mm_mercury: f32 = 133.322;
+
+        write!(f, "{}{}{}\n℃{:>10.2}\nВлажность{:>10.2}%\nДавление{:>10.2} мм рт.с.", 
+                  self.temp_to_emoji(), self.humidity_to_emoji(), self.pressure_to_enoji(), self.temp, self.humidity, self.pressure / pa_to_mm_mercury)
      }
 
 }
@@ -74,18 +93,19 @@ async fn main() {
                         .help("Sets a custom config file")
                         .required(true)
                     ).get_matches();
+
+    println!("⚠️Do not forget to make sure that you can connect to Telegram APIs. The polling module won't time out if the service is unawailabel");
     
     let config = matches.value_of("config").unwrap_or("config");
     let settings = Settings::new(config).expect("Error while reading settings"); 
 
-    let mut bot = tbot::Bot::new(settings.telegram.token.clone());
+    let bot = tbot::Bot::new(settings.telegram.token.clone());
 
-    // let (mut tx, mut rx) = std::sync::mpsc::channel();
-    let (mut tok_tx, mut tok_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tok_tx, mut tok_rx) = tokio::sync::mpsc::unbounded_channel();
 
     tokio::spawn(async move {
             println!("Conntcting to MQTT server at {}:{}/{}", settings.mqtt.host, settings.mqtt.port, settings.mqtt.topic_name);
-            let mut mqtt_options = MqttOptions::new("weather_station_bot", settings.mqtt.host, settings.mqtt.port);
+            let mqtt_options = MqttOptions::new("weather_station_bot", settings.mqtt.host, settings.mqtt.port);
             let (mut mqtt_client, notifications) = MqttClient::start(mqtt_options).unwrap();
 
             mqtt_client.subscribe(settings.mqtt.topic_name, QoS::AtLeastOnce).unwrap();
@@ -101,8 +121,7 @@ async fn main() {
                             let msg: WeatherMessage = serde_json::from_str(&text).expect("Error while deserializing message from ESP");
                             println!("Deserialized message: {:?}", msg);
                             println!("{}", msg);
-                            // tx.send(msg);
-                            tok_tx.send(msg);
+                            tok_tx.send(msg).unwrap();
                         }
                         _ => println!("{:?}", notification)
                     }
@@ -115,8 +134,17 @@ async fn main() {
         println!("Recieved new message — {:?}", msg);
         let message_str = &format!("{}", msg);
         let message = Text::plain(message_str);
+        println!("Sending message to Telegram");
         bot.send_message(ChatId::from(114238258), message).call().await.expect("Error while sending message to the bot");
     }
 
-    bot.event_loop().polling().start().await.unwrap();
+    let mut event_loop = bot.event_loop();
+
+    event_loop.command("subscribe", |context| async move {
+        let chat_id = context.chat.id;
+        context.send_message(&format!("Your chat id is {}", chat_id)).call().await.err();
+    });
+
+    event_loop.polling().start().await.unwrap();
+
 }

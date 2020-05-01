@@ -1,7 +1,8 @@
 [mqtt]
-host = "localhost"
+#host = "localhost"
+host = "192.168.1.9"
 port = 1883
 topic_name = "weather"
 
 [telegram]
-token = "xxx"
+token = "1140943609:AAGnmHwlZBTnkj2jUAz0Td_IDpr_FA3iHGw"

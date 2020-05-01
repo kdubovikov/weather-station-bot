@@ -895,6 +895,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "paste"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3c897744f63f34f7ae3a024d9162bb5001f4ad661dd24bea0dc9f075d2de1c6"
+dependencies = [
+ "paste-impl",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "paste-impl"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66fd6f92e3594f2dd7b3fc23e42d82e292f7bcda6d8e5dcd167072327234ab89"
+dependencies = [
+ "proc-macro-hack",
+ "proc-macro2 1.0.10",
+ "quote 1.0.3",
+ "syn 1.0.17",
+]
+
+[[package]]
 name = "pin-project"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1457,15 +1479,17 @@ dependencies = [
 
 [[package]]
 name = "tbot"
-version = "0.5.3"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea50ad4d596998912bdf4eec937e49cd861246b762ce88b60288293e618d731f"
+checksum = "2677b50bc197fbdee41b82bf62c810d1657c53835fcc0d532196814a069155af"
 dependencies = [
+ "futures 0.3.4",
  "hyper",
  "hyper-proxy",
  "hyper-tls",
  "is-macro",
  "native-tls",
+ "paste",
  "serde 1.0.106",
  "serde_json",
  "tokio 0.2.16",
