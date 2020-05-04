@@ -5,7 +5,9 @@ use config::{self, ConfigError, };
 pub struct MQTTSettings {
     pub host: String,
     pub port: u16,
-    pub topic_name: String
+    pub topic_name: String,
+    pub username: String,
+    pub password: String
 }
 
 #[derive(Serialize, Deserialize)]
@@ -14,9 +16,15 @@ pub struct TelegramSettings {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct TLSSettings {
+    pub ca_cert: String
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Settings {
     pub mqtt: MQTTSettings,
-    pub telegram: TelegramSettings
+    pub telegram: TelegramSettings,
+    pub tls: TLSSettings
 }
 
 impl Settings {

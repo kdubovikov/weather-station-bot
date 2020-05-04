@@ -12,6 +12,9 @@ use tokio::sync::mpsc;
 use std::collections::HashMap;
 use std::ops::Deref;
 use tbot::types::Chat;
+use std::io;
+use std::io::prelude::*;
+use std::fs::File;
 
 use tbot::{
     markup::markdown_v2, prelude::*, types::parameters::{Text, ChatId}, util::entities,
@@ -80,6 +83,13 @@ impl Display for WeatherMessage {
 
 }
 
+fn read_file_to_bytes(path: &str) -> Vec<u8> {
+    let mut f = File::open(path).unwrap();
+    let mut buf = Vec::new();
+    f.read_to_end(&mut buf);
+    buf
+}
+
 #[tokio::main]
 async fn main() {
     let matches = App::new("Weather station bot")
@@ -105,7 +115,14 @@ async fn main() {
 
     tokio::spawn(async move {
             println!("Conntcting to MQTT server at {}:{}/{}", settings.mqtt.host, settings.mqtt.port, settings.mqtt.topic_name);
-            let mqtt_options = MqttOptions::new("weather_station_bot", settings.mqtt.host, settings.mqtt.port);
+
+            let ca_cert = read_file_to_bytes(&settings.tls.ca_cert);
+
+            let mqtt_options = MqttOptions::new("weather_station_bot", settings.mqtt.host, settings.mqtt.port)
+                .set_ca(ca_cert)
+                // .set_client_auth(client_cert, client_key)
+                .set_security_opts(SecurityOptions::UsernamePassword(settings.mqtt.username, settings.mqtt.password));
+
             let (mut mqtt_client, notifications) = MqttClient::start(mqtt_options).unwrap();
 
             mqtt_client.subscribe(settings.mqtt.topic_name, QoS::AtLeastOnce).unwrap();
