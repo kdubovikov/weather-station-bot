@@ -22,8 +22,8 @@ jobs:
         default: true
     - name: Install Diesel CLI
       run: |
-        apt-get update
-        apt-get install --assume-yes libsqlite3-dev
+        sudo apt-get update
+        sudo apt-get install --assume-yes libsqlite3-dev
         cargo install diesel_cli --no-default-features --features sqlite
     - name: Build
       run: cargo build --verbose --release
