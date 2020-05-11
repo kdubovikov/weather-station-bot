@@ -27,8 +27,8 @@ jobs:
         cargo install diesel_cli --no-default-features --features sqlite
     - name: Build
       run: cargo build --verbose --release
-    - name: Run tests
-      run: cargo test --verbose
+    # - name: Run tests
+    #   run: cargo test --verbose
     - name: Upload artifacts
       uses: actions/upload-artifact@master
       with:
