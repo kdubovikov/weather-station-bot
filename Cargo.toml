@@ -14,3 +14,5 @@ serde_json = "1.0"
 clap = "2"
 tbot = "0.6.1"
 tokio = { version = "0.2", features = ["macros", "blocking"] }
+diesel = { version = "1.4.4", features = ["sqlite"] }
+chrono = {version = "0.4"}

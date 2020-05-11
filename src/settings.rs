@@ -22,9 +22,10 @@ pub struct TLSSettings {
 
 #[derive(Serialize, Deserialize)]
 pub struct Settings {
+    pub db_path: String,
     pub mqtt: MQTTSettings,
     pub telegram: TelegramSettings,
-    pub tls: TLSSettings
+    pub tls: TLSSettings,
 }
 
 impl Settings {
