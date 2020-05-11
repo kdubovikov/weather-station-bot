@@ -21,7 +21,10 @@ jobs:
         override: true
         default: true
     - name: Install Diesel CLI
-      run: cargo install diesel_cli --no-default-features --features sqlite
+      run: |
+        apt-get update
+        apt-get install --assume-yes libsqlite3-dev
+        cargo install diesel_cli --no-default-features --features sqlite
     - name: Build
       run: cargo build --verbose --release
     - name: Run tests
