@@ -1,3 +1,5 @@
+db_path = "db.sqlite"
+
 [mqtt]
 #host = "localhost"
 #host = "192.168.1.9"
@@ -9,7 +11,7 @@ username = "mqttusr"
 password = "mqttpass"
 
 [telegram]
-token = "1140943609:AAGnmHwlZBTnkj2jUAz0Td_IDpr_FA3iHGw"
+token = "*"
 
 [tls]
 ca_cert = "./certs/ca.crt"
