@@ -12,7 +12,7 @@ use rumqtt::{MqttClient, MqttOptions, QoS, SecurityOptions, Notification, Receiv
 use std::fs::File;
 use std::io::prelude::*;
 
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 use std::sync::Arc;
 
 use tbot::{
@@ -20,9 +20,10 @@ use tbot::{
     types::parameters::{ChatId, Text},
 };
 
-use db::{establish_connection, NewWeatherMessage, WeatherMessage, EspWeatherMessage};
+use db::{establish_connection, NewWeatherMessage, EspWeatherMessage};
 
 
+/// Helper function to read certificate files from disk
 fn read_file_to_bytes(path: &str) -> Vec<u8> {
     let mut f = File::open(path).unwrap();
     let mut buf = Vec::new();
@@ -30,6 +31,8 @@ fn read_file_to_bytes(path: &str) -> Vec<u8> {
     buf
 }
 
+/// Connect to MQTT server using [Settings](settings::Settings) structure. The settings are meant to be read from config TOML file
+/// Will automatically subsribe to the topic name in the config. 
 async fn connect_to_mqtt_server(settings: &Settings) -> Receiver<Notification> {
     println!(
         "Conntcting to MQTT server at {}:{}/{}",
@@ -44,7 +47,6 @@ async fn connect_to_mqtt_server(settings: &Settings) -> Receiver<Notification> {
         settings.mqtt.port
     )
     .set_ca(ca_cert)
-    // .set_client_auth(client_cert, client_key)
     .set_security_opts(SecurityOptions::UsernamePassword(
         settings.mqtt.username.clone(),
         settings.mqtt.password.clone(),
@@ -60,6 +62,9 @@ async fn connect_to_mqtt_server(settings: &Settings) -> Receiver<Notification> {
 
 }
 
+/// Main MQTT message processing loop. 
+///
+/// Recieves a message from MQTT topic, deserializes it and sends it for further processing using Tokio MPSC framwrok. See [send_message_to_telegram](send_message_to_telegram)
 fn process_messages_from_device(notifications: &Receiver<Notification>, tok_tx: &UnboundedSender<EspWeatherMessage>) {
     println!("Waiting for notifications");
     for notification in notifications {
@@ -80,6 +85,7 @@ fn process_messages_from_device(notifications: &Receiver<Notification>, tok_tx: 
     }
 }
 
+/// Sends a message to subscribers
 async fn send_message_to_telegram(msg: &EspWeatherMessage, bot: &Arc<tbot::Bot>) {
     let message_str = &format!("{}", msg);
     let message = Text::plain(message_str);
@@ -139,7 +145,7 @@ async fn main() {
             tokio::task::spawn_blocking(move || {
                 println!("Saving message to DB");
                 let connection = establish_connection(&db); 
-                let new_log = msg.to_new_weather_message();
+                let new_log = NewWeatherMessage::from_esp_weather_message(&msg);
                 new_log.save_to_db(&connection).unwrap();
                 print!("Successfully saved message to DB");
             });

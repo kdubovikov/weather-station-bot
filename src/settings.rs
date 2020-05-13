@@ -29,6 +29,7 @@ pub struct Settings {
 }
 
 impl Settings {
+   /// Read settings from the config file
    pub fn new(config_path: &str) -> Result<Self, ConfigError> {
     let mut settings = config::Config::default();
     println!("Reading config file");

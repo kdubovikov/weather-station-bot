@@ -6,12 +6,14 @@ use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
+/// Connect to SQLite database
 pub fn establish_connection(database_url: &str) -> SqliteConnection {
     println!("Connecting to {}", database_url);
     SqliteConnection::establish(database_url)
         .expect(&format!("Error connecting to {}", database_url))
 }
 
+/// WeatherMessage representation for read DB queries
 #[derive(Queryable, Serialize, Deserialize, Debug)]
 pub struct WeatherMessage {
     id: i32,
@@ -21,6 +23,7 @@ pub struct WeatherMessage {
     humidity: f32,
 }
 
+/// WeatherMessage respresentation for insert DB queries
 #[derive(Insertable, Serialize, Deserialize, Debug)]
 #[table_name = "weather_log"]
 pub struct NewWeatherMessage {
@@ -30,6 +33,7 @@ pub struct NewWeatherMessage {
     humidity: f32,
 }
 
+/// Raw WeatherMessage that comves from the edge device via MQTT in a JSON format
 #[derive(Serialize, Deserialize, Debug)]
 pub struct EspWeatherMessage {
     temp: f32,
@@ -78,10 +82,6 @@ impl EspWeatherMessage {
     pub fn should_alert(&self) -> bool {
         self.temp > 30. || self.temp < 15. || self.humidity >= 85.
     }
-
-    pub fn to_new_weather_message(&self) -> NewWeatherMessage {
-        NewWeatherMessage::new(self.temp, self.humidity, self.humidity)
-    }
 }
 
 impl NewWeatherMessage {
@@ -92,6 +92,10 @@ impl NewWeatherMessage {
             pressure: press,
             humidity: hum,
         }
+    }
+
+    pub fn from_esp_weather_message(msg: &EspWeatherMessage) -> NewWeatherMessage {
+        NewWeatherMessage::new(msg.temp, msg.humidity, msg.humidity)
     }
 
     pub fn save_to_db(&self, connection: &SqliteConnection) -> QueryResult<usize> {
@@ -105,7 +109,7 @@ impl NewWeatherMessage {
 
 pub fn median_weather(n_days: usize, limit: i64, connection: &SqliteConnection) -> QueryResult<Vec<WeatherMessage>> {
     let weather_logs = weather_log.order(timestamp.desc()).limit(limit).load::<WeatherMessage>(connection);
-    weather_logs
+    unimplemented!()
 }
 
 impl Display for EspWeatherMessage {
