@@ -1,5 +1,7 @@
 use crate::schema::weather_log;
+use crate::schema::subscribers;
 use crate::schema::weather_log::dsl::*;
+use crate::schema::subscribers::dsl::*;
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
@@ -11,6 +13,46 @@ pub fn establish_connection(database_url: &str) -> SqliteConnection {
     println!("Connecting to {}", database_url);
     SqliteConnection::establish(database_url)
         .expect(&format!("Error connecting to {}", database_url))
+}
+
+#[derive(Queryable)]
+pub struct Subscriber {
+    id: i32,
+    telegram_chat_id: i64
+}
+
+#[derive(Insertable)]
+#[table_name = "subscribers"]
+pub struct NewSubscriber {
+    telegram_chat_id: i64
+}
+
+/// Save new subscriber to the database if he does not already exist
+pub fn subscribe(chat_id: i64, connection: &SqliteConnection) -> Result<NewSubscriber, &str> {
+    let existing_subscriber = subscribers.filter(telegram_chat_id.eq(chat_id)).first::<Subscriber>(connection);
+
+    if let Err(diesel::NotFound) = existing_subscriber {
+        let subscriber = NewSubscriber {telegram_chat_id: chat_id };
+        match diesel::insert_into(subscribers).values(&subscriber).execute(connection) {
+            Ok(_) => Ok(subscriber),
+            Err(_) => Err("Error while saving new subscriber to DB")
+        }
+    } else {
+        Err("The subscriber already exists")
+    }
+}
+
+/// Deletes a subscriber from the database
+pub fn unsubscribe(chat_id: i64, connection: &SqliteConnection) -> QueryResult<usize> {
+    diesel::delete(subscribers.filter(telegram_chat_id.eq(chat_id))).execute(connection)
+}
+
+pub fn get_all_subscribers(connection: &SqliteConnection) -> Vec<i64> {
+    subscribers.load::<Subscriber>(connection)
+        .unwrap_or_default()
+        .iter()
+        .map(|s| s.telegram_chat_id)
+        .collect()
 }
 
 /// WeatherMessage representation for read DB queries
@@ -133,16 +175,18 @@ impl Display for EspWeatherMessage {
 mod tests {
     use super::*;
 
+    const TEST_DB: &str = "test.sqlite";
+
     #[test]
     fn test_select_weather_message() {
-        let connection = establish_connection("db.sqlite");
+        let connection = establish_connection(TEST_DB);
         let results = weather_log.load::<WeatherMessage>(&connection);
         assert!(results.is_ok())
     }
 
     #[test]
     fn test_insert_and_delete_weather_message() {
-        let connection = establish_connection("db.sqlite");
+        let connection = establish_connection(TEST_DB);
         let new_weather_message = NewWeatherMessage::new(25.0, 10000.0, 55.0);
         let result = diesel::insert_into(weather_log::table)
             .values(&new_weather_message)
@@ -155,13 +199,31 @@ mod tests {
             .load::<WeatherMessage>(&connection);
         assert!(last_log.is_ok());
 
-        let last_log = &last_log.unwrap()[0];
-        let del_result =
-            diesel::delete(weather_log.filter(id.eq(last_log.id))).execute(&connection);
+        let last_log_id: i32 = last_log.unwrap()[0].id;
+        let del_result = diesel::delete(weather_log.find(last_log_id)).execute(&connection);
         assert!(del_result.is_ok());
 
         let results = weather_log.load::<WeatherMessage>(&connection);
         assert!(results.is_ok());
         assert_eq!(results.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_subscription() {
+        const TEST_SUB_ID: i64 = 123;
+        let connection = establish_connection(TEST_DB);
+        let sub_result = subscribe(TEST_SUB_ID, &connection);
+        if let Err(e) = sub_result {
+            println!("{}", e);
+        }
+        assert!(sub_result.is_ok());
+
+        let subscriber: Subscriber = subscribers.filter(telegram_chat_id.eq(TEST_SUB_ID)).first(&connection).unwrap();
+        assert_eq!(subscriber.telegram_chat_id, TEST_SUB_ID);
+
+        let unsub_result = unsubscribe(TEST_SUB_ID, &connection);
+        assert!(unsub_result.is_ok());
+        let result: QueryResult<Subscriber> = subscribers.filter(telegram_chat_id.eq(TEST_SUB_ID)).first(&connection);
+        assert!(result.is_err());
     }
 }

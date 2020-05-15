@@ -12,15 +12,15 @@ use rumqtt::{MqttClient, MqttOptions, QoS, SecurityOptions, Notification, Receiv
 use std::fs::File;
 use std::io::prelude::*;
 
-use tokio::sync::mpsc::UnboundedSender;
-use std::sync::Arc;
+use tokio::sync::{mpsc::UnboundedSender, watch};
+use std::sync::{Arc, Mutex};
 
 use tbot::{
     prelude::*,
     types::parameters::{ChatId, Text},
 };
 
-use db::{establish_connection, NewWeatherMessage, EspWeatherMessage};
+use db::{establish_connection, NewWeatherMessage, EspWeatherMessage, subscribe, unsubscribe, get_all_subscribers};
 
 
 /// Helper function to read certificate files from disk
@@ -86,11 +86,11 @@ fn process_messages_from_device(notifications: &Receiver<Notification>, tok_tx: 
 }
 
 /// Sends a message to subscribers
-async fn send_message_to_telegram(msg: &EspWeatherMessage, bot: &Arc<tbot::Bot>) {
+async fn send_message_to_telegram(chat_id:i64, msg: &EspWeatherMessage, bot: &Arc<tbot::Bot>) {
     let message_str = &format!("{}", msg);
     let message = Text::plain(message_str);
     println!("Sending message to Telegram");
-    bot.send_message(ChatId::from(114238258), message)
+    bot.send_message(ChatId::from(chat_id), message)
         .call()
         .await
         .expect("Error while sending message to the bot");
@@ -121,9 +121,11 @@ async fn main() {
 
     let (tok_tx, mut tok_rx) = tokio::sync::mpsc::unbounded_channel::<EspWeatherMessage>();
 
-    let db_path = Arc::new(settings.db_path.clone());
+    let (_, mut conf_rx) = watch::channel(settings.clone());
 
+    let mut conf = conf_rx.clone();
     tokio::spawn(async move {
+        let settings = conf.recv().await.unwrap();
         let notifications = connect_to_mqtt_server(&settings).await;
 
         tokio::task::spawn_blocking(move || {
@@ -132,19 +134,24 @@ async fn main() {
     });
 
 
-    println!("Waiting for messages");
+    println!("Waiting for messages");   
     let bot_sender = bot.clone();
+    let mut conf = conf_rx.clone();
     tokio::spawn(async move {
+        // let db = Arc::clone(&db);
+        let settings: Settings = conf.recv().await.unwrap();
         while let Some(msg) = tok_rx.recv().await {
+            let subscribers = get_all_subscribers(&establish_connection(&settings.db_path)); 
             println!("Recieved new message — {:?}", msg);
+            let db_path = settings.db_path.clone();
 
-            send_message_to_telegram(&msg, &bot_sender).await;
-
-            let db = Arc::clone(&db_path);
+            for subscriber in &subscribers {
+                send_message_to_telegram(*subscriber, &msg, &bot_sender).await;
+            }
 
             tokio::task::spawn_blocking(move || {
                 println!("Saving message to DB");
-                let connection = establish_connection(&db); 
+                let connection = establish_connection(&db_path); 
                 let new_log = NewWeatherMessage::from_esp_weather_message(&msg);
                 new_log.save_to_db(&connection).unwrap();
                 print!("Successfully saved message to DB");
@@ -152,15 +159,42 @@ async fn main() {
         }
     });
 
-
     let mut event_loop = (*bot).clone().event_loop();
-    event_loop.command("subscribe", |context| async move {
-        let chat_id = context.chat.id;
-        context
-            .send_message(&format!("Your chat id is {}", chat_id))
-            .call()
-            .await
-            .err();
+    let mut conf = conf_rx.clone();
+
+    event_loop.command("subscribe", move |context| {
+        let mut conf = conf.clone();
+
+        async move {
+            let settings: Settings = conf.recv().await.unwrap();
+            let chat_id = context.chat.id.0;
+            context
+                .send_message(&format!("Your chat id is {}", chat_id))
+                .call()
+                .await
+                .err();
+            
+
+            let connection = establish_connection(&settings.db_path); 
+            subscribe(chat_id, &connection).unwrap();
+        }
+    });
+
+    let mut conf = conf_rx.clone();
+    event_loop.command("unsubscribe", move |context| {
+        let mut conf = conf_rx.clone();
+        async move {
+            let settings: Settings = conf.recv().await.unwrap();
+            let chat_id = context.chat.id.0;
+            let connection = establish_connection(&settings.db_path);
+            let result = unsubscribe(chat_id, &connection);
+
+            if result.is_ok() {
+                context.send_message("Sucessfully unsubscribed").call().await.err();
+            } else {
+                context.send_message("Can't unsubscribe. Are you subscribed?").call().await.err();
+            }
+        }
     });
 
     event_loop.polling().start().await.unwrap();
