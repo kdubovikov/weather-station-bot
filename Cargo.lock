@@ -267,6 +267,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "db"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "diesel",
+ "serde 1.0.106",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1918,10 +1927,9 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 name = "weather_station_bot"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "clap",
  "config",
- "diesel",
+ "db",
  "rumqtt",
  "serde 1.0.106",
  "serde_json",

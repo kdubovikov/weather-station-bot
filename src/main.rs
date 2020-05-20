@@ -1,9 +1,4 @@
 #![feature(async_closure)]
-#[macro_use]
-extern crate diesel;
-
-mod db;
-mod schema;
 mod settings;
 
 use crate::settings::Settings;

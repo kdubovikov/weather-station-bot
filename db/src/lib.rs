@@ -1,3 +1,7 @@
+#[macro_use]
+extern crate diesel;
+mod schema;
+
 use crate::schema::weather_log;
 use crate::schema::subscribers;
 use crate::schema::weather_log::dsl::*;
