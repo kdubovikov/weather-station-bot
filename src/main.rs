@@ -121,7 +121,7 @@ async fn main() {
 
     let (tok_tx, mut tok_rx) = tokio::sync::mpsc::unbounded_channel::<EspWeatherMessage>();
 
-    let (_, mut conf_rx) = watch::channel(settings.clone());
+    let (_, conf_rx) = watch::channel(settings.clone());
 
     let mut conf = conf_rx.clone();
     tokio::spawn(async move {
@@ -160,8 +160,7 @@ async fn main() {
     });
 
     let mut event_loop = (*bot).clone().event_loop();
-    let mut conf = conf_rx.clone();
-
+    let conf = conf_rx.clone();
     event_loop.command("subscribe", move |context| {
         let mut conf = conf.clone();
 
@@ -180,9 +179,9 @@ async fn main() {
         }
     });
 
-    let mut conf = conf_rx.clone();
+    let conf = conf_rx.clone();
     event_loop.command("unsubscribe", move |context| {
-        let mut conf = conf_rx.clone();
+        let mut conf = conf.clone();
         async move {
             let settings: Settings = conf.recv().await.unwrap();
             let chat_id = context.chat.id.0;
