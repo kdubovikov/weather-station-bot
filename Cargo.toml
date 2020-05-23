@@ -1,17 +1,17 @@
 [package]
 name = "weather_station_bot"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Kirill Dubovikov <kdubovikov@cinimex.ru>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rumqtt="0.31.0"
+rumq-client = "0.1.0-alpha.10"
 config = "0.10.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 clap = "2"
-tbot = "0.6.1"
+tbot = "0.6.2"
 tokio = { version = "0.2", features = ["macros", "blocking"] }
 db = { path = "db" }

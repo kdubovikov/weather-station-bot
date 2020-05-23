@@ -1,13 +1,12 @@
 #![feature(async_closure)]
-mod settings;
 
-use crate::settings::Settings;
+use tokio::stream::StreamExt;
+use weather_station_bot::Settings;
 use clap::{App, Arg};
-use rumqtt::{MqttClient, MqttOptions, QoS, SecurityOptions, Notification, Receiver};
 use std::fs::File;
 use std::io::prelude::*;
 
-use tokio::sync::{mpsc::UnboundedSender, watch};
+use tokio::sync::{mpsc::{UnboundedSender, channel}, watch};
 use std::sync::{Arc, Mutex};
 
 use tbot::{
@@ -16,6 +15,7 @@ use tbot::{
 };
 
 use db::{establish_connection, NewWeatherMessage, EspWeatherMessage, subscribe, unsubscribe, get_all_subscribers};
+use rumq_client::{self, eventloop, MqttEventLoop, MqttOptions, Publish, QoS, Request, Subscribe, Notification};
 
 
 /// Helper function to read certificate files from disk
@@ -26,57 +26,56 @@ fn read_file_to_bytes(path: &str) -> Vec<u8> {
     buf
 }
 
-/// Connect to MQTT server using [Settings](settings::Settings) structure. The settings are meant to be read from config TOML file
-/// Will automatically subsribe to the topic name in the config. 
-async fn connect_to_mqtt_server(settings: &Settings) -> Receiver<Notification> {
+/// Connects to MQTT server using [Settings](settings::Settings) structure. The settings are meant to be read from config TOML file
+/// Will automatically subsribe to the topic name in the config.
+/// Subscribes to the weather topic and forwards parsed messages to tokio channel
+async fn process_mqtt_messages(settings: &Settings, tx: UnboundedSender<EspWeatherMessage>) {
     println!(
         "Conntcting to MQTT server at {}:{}/{}",
         settings.mqtt.host, settings.mqtt.port, settings.mqtt.topic_name
     );
 
+    let mut mqtt_options = MqttOptions::new("weather_station_bot", settings.mqtt.host.clone(), settings.mqtt.port.clone());
+    mqtt_options.set_credentials(settings.mqtt.username.clone(), settings.mqtt.password.clone());
+    mqtt_options.set_inflight(10);
+
     let ca_cert = read_file_to_bytes(&settings.tls.ca_cert);
+    mqtt_options.set_ca(ca_cert);
+    mqtt_options.set_keep_alive(50);
+    mqtt_options.set_throttle(std::time::Duration::from_secs(1));
 
-    let mqtt_options = MqttOptions::new(
-        "weather_station_bot",
-        &settings.mqtt.host,
-        settings.mqtt.port
-    )
-    .set_ca(ca_cert)
-    .set_security_opts(SecurityOptions::UsernamePassword(
-        settings.mqtt.username.clone(),
-        settings.mqtt.password.clone(),
-    ));
+    let (mut requests_tx, requests_rx) = channel(10);
+    let subscription = Subscribe::new(settings.mqtt.topic_name.clone(), QoS::AtLeastOnce);
+    let _ = requests_tx.send(Request::Subscribe(subscription)).await;
 
-    let (mut mqtt_client, notifications) = MqttClient::start(mqtt_options).unwrap();
+    let mut event_loop = eventloop(mqtt_options, requests_rx);
+    // let mut event_loop = connect_to_mqtt_server(&settings);
 
-    mqtt_client
-        .subscribe(&settings.mqtt.topic_name, QoS::AtLeastOnce)
-        .unwrap();
+    let mut stream = event_loop.connect().await.unwrap();
 
-    notifications
-
+    println!("Waiting for notifications");
+    while let Some(notification) = stream.next().await {
+        println!("New notification — {:?}", notification);
+        process_message_from_device(&notification, &tx);
+    }
 }
 
 /// Main MQTT message processing loop. 
 ///
 /// Recieves a message from MQTT topic, deserializes it and sends it for further processing using Tokio MPSC framwrok. See [send_message_to_telegram](send_message_to_telegram)
-fn process_messages_from_device(notifications: &Receiver<Notification>, tok_tx: &UnboundedSender<EspWeatherMessage>) {
-    println!("Waiting for notifications");
-    for notification in notifications {
-        match notification {
-            rumqtt::Notification::Publish(publish) => {
-                let payload = Arc::try_unwrap(publish.payload).unwrap();
-                let text: String = String::from_utf8(payload)
-                    .expect("Can't decode payload for notification");
-                println!("Recieved message: {}", text);
-                let msg: EspWeatherMessage = serde_json::from_str(&text)
-                    .expect("Error while deserializing message from ESP");
-                println!("Deserialized message: {:?}", msg);
-                println!("{}", msg);
-                tok_tx.send(msg).unwrap();
-            }
-            _ => println!("{:?}", notification),
+fn process_message_from_device(notification: &Notification, tok_tx: &UnboundedSender<EspWeatherMessage>) {
+    match notification {
+        Notification::Publish(publish) => {
+            let text: String = String::from_utf8(publish.payload.clone())
+                .expect("Can't decode payload for notification");
+            println!("Recieved message: {}", text);
+            let msg: EspWeatherMessage = serde_json::from_str(&text)
+                .expect("Error while deserializing message from ESP");
+            println!("Deserialized message: {:?}", msg);
+            println!("{}", msg);
+            tok_tx.send(msg).unwrap();
         }
+        _ => println!("{:?}", notification),
     }
 }
 
@@ -119,15 +118,10 @@ async fn main() {
     let (_, conf_rx) = watch::channel(settings.clone());
 
     let mut conf = conf_rx.clone();
-    tokio::spawn(async move {
-        let settings = conf.recv().await.unwrap();
-        let notifications = connect_to_mqtt_server(&settings).await;
 
-        tokio::task::spawn_blocking(move || {
-            process_messages_from_device(&notifications, &tok_tx);
-        });
-    });
+    let settings = conf.recv().await.unwrap();
 
+    process_mqtt_messages(&settings, tok_tx).await;
 
     println!("Waiting for messages");   
     let bot_sender = bot.clone();

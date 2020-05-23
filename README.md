@@ -1,5 +1,6 @@
 # TODO
-- [] Add subscription command support
+- [x] Add subscription command support
+- [] Add Actix or Rocket API. For actix look here: https://turreta.com/2019/09/21/rest-api-with-rust-actix-web-and-postgresql-part-3/
 - [] Fix weather message formatiing. Table columns do not align
 
 # Cross-compiling for lunux
