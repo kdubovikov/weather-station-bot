@@ -32,5 +32,5 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@master
       with:
-        name: wheels
-        path: target/release/weather_station_bot
+        name: binaries
+        path: target/release/weather_station_*

@@ -21,11 +21,18 @@ pub struct TLSSettings {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct ApiSettings {
+    pub host: String,
+    pub port: String
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub db_path: String,
     pub mqtt: MQTTSettings,
     pub telegram: TelegramSettings,
     pub tls: TLSSettings,
+    pub api: ApiSettings
 }
 
 impl Settings {

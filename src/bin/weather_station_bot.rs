@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 use tokio::sync::{mpsc::{UnboundedSender, channel}, watch};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tbot::{
     prelude::*,
@@ -15,7 +15,7 @@ use tbot::{
 };
 
 use db::{establish_connection, NewWeatherMessage, EspWeatherMessage, subscribe, unsubscribe, get_all_subscribers};
-use rumq_client::{self, eventloop, MqttEventLoop, MqttOptions, Publish, QoS, Request, Subscribe, Notification};
+use rumq_client::{self, eventloop, MqttOptions, QoS, Request, Subscribe, Notification};
 
 
 /// Helper function to read certificate files from disk
@@ -127,7 +127,6 @@ async fn main() {
     let bot_sender = bot.clone();
     let mut conf = conf_rx.clone();
     tokio::spawn(async move {
-        // let db = Arc::clone(&db);
         let settings: Settings = conf.recv().await.unwrap();
         while let Some(msg) = tok_rx.recv().await {
             let subscribers = get_all_subscribers(&establish_connection(&settings.db_path)); 

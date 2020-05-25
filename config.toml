@@ -11,7 +11,11 @@ username = "mqttusr"
 password = "mqttpass"
 
 [telegram]
-token = "*"
+token = "1140943609:AAGnmHwlZBTnkj2jUAz0Td_IDpr_FA3iHGw"
 
 [tls]
 ca_cert = "./certs/ca.crt"
+
+[api]
+host = "0.0.0.0"
+port = "8080"

@@ -59,14 +59,15 @@ pub fn get_all_subscribers(connection: &SqliteConnection) -> Vec<i64> {
         .collect()
 }
 
+
 /// WeatherMessage representation for read DB queries
 #[derive(Queryable, Serialize, Deserialize, Debug)]
 pub struct WeatherMessage {
-    id: i32,
-    timestamp: String,
-    temp: f32,
-    pressure: f32,
-    humidity: f32,
+    pub id: i32,
+    pub timestamp: String,
+    pub temp: f32,
+    pub pressure: f32,
+    pub humidity: f32,
 }
 
 /// WeatherMessage respresentation for insert DB queries
@@ -153,11 +154,6 @@ impl NewWeatherMessage {
     }
 }
 
-pub fn median_weather(n_days: usize, limit: i64, connection: &SqliteConnection) -> QueryResult<Vec<WeatherMessage>> {
-    let weather_logs = weather_log.order(timestamp.desc()).limit(limit).load::<WeatherMessage>(connection);
-    unimplemented!()
-}
-
 impl Display for EspWeatherMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         const pa_to_mm_mercury: f32 = 133.322;
@@ -173,6 +169,11 @@ impl Display for EspWeatherMessage {
             self.pressure / pa_to_mm_mercury
         )
     }
+}
+
+pub fn get_all_weather_messages(connection: &SqliteConnection) -> Vec<WeatherMessage> {
+    let weather_logs = weather_log.order(timestamp.desc()).load::<WeatherMessage>(connection);
+    weather_logs.unwrap()
 }
 
 #[cfg(test)]
