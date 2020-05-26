@@ -121,7 +121,9 @@ async fn main() {
 
     let settings = conf.recv().await.unwrap();
 
-    process_mqtt_messages(&settings, tok_tx).await;
+    tokio::spawn(async move {
+        process_mqtt_messages(&settings, tok_tx).await;
+    });
 
     println!("Waiting for messages");   
     let bot_sender = bot.clone();
@@ -129,11 +131,11 @@ async fn main() {
     tokio::spawn(async move {
         let settings: Settings = conf.recv().await.unwrap();
         while let Some(msg) = tok_rx.recv().await {
-            let subscribers = get_all_subscribers(&establish_connection(&settings.db_path)); 
-            println!("Recieved new message — {:?}", msg);
-            let db_path = settings.db_path.clone();
+        let subscribers = get_all_subscribers(&establish_connection(&settings.db_path)); 
+        println!("Recieved new message — {:?}", msg);
+        let db_path = settings.db_path.clone();
 
-            for subscriber in &subscribers {
+        for subscriber in &subscribers {
                 send_message_to_telegram(*subscriber, &msg, &bot_sender).await;
             }
 
