@@ -19,12 +19,19 @@ pub fn establish_connection(database_url: &str) -> SqliteConnection {
         .expect(&format!("Error connecting to {}", database_url))
 }
 
+/// This struct represents an existing bot subscriber who can recieve 
+/// notifications about new weather measurements.
+/// `Queryable` trait identifies that Diesel will use this structure to 
+/// represent rows selected from  SQLite database.
 #[derive(Queryable)]
 pub struct Subscriber {
     id: i32,
     telegram_chat_id: i64
 }
 
+/// This struct represents a new bot subscriber.
+/// `Insertable` trait means that Diesel will expect this stcuture to
+/// represent new rows that we can insert into SQLite database.
 #[derive(Insertable)]
 #[table_name = "subscribers"]
 pub struct NewSubscriber {
@@ -33,10 +40,13 @@ pub struct NewSubscriber {
 
 /// Save new subscriber to the database if he does not already exist
 pub fn subscribe(chat_id: i64, connection: &SqliteConnection) -> Result<NewSubscriber, &str> {
+    // let's find if there are any existing subscribers
     let existing_subscriber = subscribers.filter(telegram_chat_id.eq(chat_id)).first::<Subscriber>(connection);
 
     if let Err(diesel::NotFound) = existing_subscriber {
+        // let's create a new one if there is noone found
         let subscriber = NewSubscriber {telegram_chat_id: chat_id };
+
         match diesel::insert_into(subscribers).values(&subscriber).execute(connection) {
             Ok(_) => Ok(subscriber),
             Err(_) => Err("Error while saving new subscriber to DB")
@@ -51,6 +61,7 @@ pub fn unsubscribe(chat_id: i64, connection: &SqliteConnection) -> QueryResult<u
     diesel::delete(subscribers.filter(telegram_chat_id.eq(chat_id))).execute(connection)
 }
 
+/// returns all existing subscribers
 pub fn get_all_subscribers(connection: &SqliteConnection) -> Vec<i64> {
     subscribers.load::<Subscriber>(connection)
         .unwrap_or_default()
@@ -61,6 +72,7 @@ pub fn get_all_subscribers(connection: &SqliteConnection) -> Vec<i64> {
 
 
 /// WeatherMessage representation for read DB queries
+/// This structure represents weather data that we read from SQLlite
 #[derive(Queryable, Serialize, Deserialize, Debug)]
 pub struct WeatherMessage {
     pub id: i32,
@@ -71,6 +83,7 @@ pub struct WeatherMessage {
 }
 
 /// WeatherMessage respresentation for insert DB queries
+/// This structure represents weather data that we insert into SQLlite
 #[derive(Insertable, Serialize, Deserialize, Debug)]
 #[table_name = "weather_log"]
 pub struct NewWeatherMessage {
@@ -89,6 +102,7 @@ pub struct EspWeatherMessage {
 }
 
 impl EspWeatherMessage {
+    /// We will use this function to convert temperature in Celcium degrees (because metric system rules 😅)
     pub fn temp_to_emoji(&self) -> &str {
         if self.temp < -10. {
             "🥶"
@@ -103,9 +117,10 @@ impl EspWeatherMessage {
         }
     }
 
+    /// A handy function to convert humidity percentage into useful notifications
     pub fn humidity_to_emoji(&self) -> &str {
         if self.humidity > 70. {
-            "не забудь зонтик ☂️"
+            "Do not forget an umbrella ☂️"
         } else if self.humidity > 90. {
             "🌧"
         } else {
@@ -113,25 +128,24 @@ impl EspWeatherMessage {
         }
     }
 
+    /// Converts pressure from Pascals to millimetres of mercury
     pub fn pressure_to_enoji(&self) -> &str {
         const PA_TO_MM_MERCURY: f32 = 133.322;
         const NORMAL_PRESSURE: f32 = 101_325.0 / PA_TO_MM_MERCURY;
 
         if (self.pressure / PA_TO_MM_MERCURY) > (NORMAL_PRESSURE + 10.0) {
-            "⬆️ повышенное давление"
+            "⬆️ high pressure"
         } else if (self.pressure / PA_TO_MM_MERCURY) < (NORMAL_PRESSURE - 10.0) {
-            "⬇️ пониженное давление"
+            "⬇️ low pressure"
         } else {
             ""
         }
     }
-
-    pub fn should_alert(&self) -> bool {
-        self.temp > 30. || self.temp < 15. || self.humidity >= 85.
-    }
 }
 
+/// A few convenience methods for constructing and saving weather messages
 impl NewWeatherMessage {
+    /// Create a new WeatherMessage that later can be saved to database
     pub fn new(tmp: f32, press: f32, hum: f32) -> NewWeatherMessage {
         NewWeatherMessage {
             timestamp: Utc::now().to_rfc3339(),
@@ -141,10 +155,13 @@ impl NewWeatherMessage {
         }
     }
 
+    /// Converts `EspWeatherMessage` to `NewWeatherMessage` that can be saved to DB.
+    /// This function should be used to convert all new incoming weather messages
     pub fn from_esp_weather_message(msg: &EspWeatherMessage) -> NewWeatherMessage {
         NewWeatherMessage::new(msg.temp, msg.humidity, msg.humidity)
     }
-
+   
+    /// Saves message to database
     pub fn save_to_db(&self, connection: &SqliteConnection) -> QueryResult<usize> {
         let result = diesel::insert_into(weather_log::table)
             .values(self)
@@ -154,6 +171,8 @@ impl NewWeatherMessage {
     }
 }
 
+/// Display trait is used to convert `EspWeatherMessage` to string.
+/// We will use this implementation to convert messages to text notifications that will be sent to subscribers
 impl Display for EspWeatherMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         const pa_to_mm_mercury: f32 = 133.322;
@@ -171,6 +190,7 @@ impl Display for EspWeatherMessage {
     }
 }
 
+/// Returns all existing weather messages ordered from last to first
 pub fn get_all_weather_messages(connection: &SqliteConnection) -> Vec<WeatherMessage> {
     let weather_logs = weather_log.order(timestamp.desc()).load::<WeatherMessage>(connection);
     weather_logs.unwrap()

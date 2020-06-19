@@ -1,3 +1,4 @@
+/// This module contains common structures that represent config file contents
 use serde::{Serialize, Deserialize};
 use config::{self, ConfigError, };
 
